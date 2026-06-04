@@ -1,0 +1,63 @@
+[package]
+name = "dtls-rs"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.76"
+license = "MIT OR Apache-2.0"
+description = "Pure-Rust DTLS 1.2 (RFC 6347) over a memory-buffer transport, WebRTC DTLS-SRTP profile only — no socket I/O, caller-driven state machine"
+authors = ["Per Johansson <per@doom.fish>"]
+keywords = ["dtls", "webrtc", "srtp", "tls", "macos"]
+categories = ["network-programming", "cryptography"]
+readme = "README.md"
+build = "build.rs"
+publish = false
+include = [
+    "src/**/*",
+    "examples/**/*",
+    "tests/**/*",
+    "build.rs",
+    "Cargo.toml",
+    "README.md",
+    "CHANGELOG.md",
+    "COVERAGE.md",
+    "COVERAGE_AUDIT.md",
+    "LICENSE-*",
+]
+
+[lib]
+name = "dtls"
+crate-type = ["lib"]
+
+[dependencies]
+libc = "0.2"
+cryptokit-rs = { path = "../cryptokit-rs" }
+security-rs = { path = "../security-rs" }
+
+[lints.clippy]
+pedantic = { level = "warn", priority = -1 }
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+doc_markdown = "allow"
+trivially_copy_pass_by_ref = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+must_use_candidate = "allow"
+module_name_repetitions = "allow"
+
+[package.metadata.docs.rs]
+default-target = "aarch64-apple-darwin"
+targets = ["aarch64-apple-darwin", "x86_64-apple-darwin"]
+
+[[example]]
+name = "01_self_signed_cert"
+
+[[example]]
+name = "02_handshake_loopback"
+
+[[example]]
+name = "03_exporter"
+
+[profile.release]
+debug = "full"
+strip = "none"
