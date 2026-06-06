@@ -443,8 +443,12 @@ impl Connection {
                     .peer_cert_der
                     .as_ref()
                     .ok_or(Error::InvalidState("no peer certificate before SKE"))?;
-                let client_random = self.client_random.expect("client random set");
-                let server_random = self.server_random.expect("server random set");
+                let client_random = self
+                    .client_random
+                    .ok_or(Error::InvalidState("no client random before SKE"))?;
+                let server_random = self
+                    .server_random
+                    .ok_or(Error::InvalidState("no ServerHello before SKE"))?;
                 client::verify_server_key_exchange(
                     peer_key,
                     leaf,
@@ -471,8 +475,12 @@ impl Connection {
 
     fn finish_client_flight(&mut self, now_ms: u64) -> Result<()> {
         self.last_flight.clear();
-        let server_random = self.server_random.expect("server random set");
-        let client_random = self.client_random.expect("client random set");
+        let server_random = self
+            .server_random
+            .ok_or(Error::InvalidState("no ServerHello before ServerHelloDone"))?;
+        let client_random = self
+            .client_random
+            .ok_or(Error::InvalidState("no client random before ServerHelloDone"))?;
         let peer_point = self
             .peer_eph_point
             .clone()
