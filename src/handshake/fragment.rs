@@ -43,13 +43,15 @@ impl Partial {
     fn missing(&self, start: u32, end: u32) -> Vec<(u32, u32)> {
         let mut gaps = Vec::new();
         let mut cursor = start;
-        for (&offset, chunk) in &self.chunks {
+        let first = self
+            .chunks
+            .range(..=start)
+            .next_back()
+            .map_or(start, |(&offset, _)| offset);
+        for (&offset, chunk) in self.chunks.range(first..end.max(first)) {
             let chunk_end = offset + chunk.len() as u32;
             if chunk_end <= cursor {
                 continue;
-            }
-            if offset >= end {
-                break;
             }
             if offset > cursor {
                 gaps.push((cursor, offset));

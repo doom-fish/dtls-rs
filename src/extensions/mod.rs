@@ -12,6 +12,8 @@ pub mod signature_algorithms;
 pub mod supported_groups;
 pub mod use_srtp;
 
+use std::collections::HashSet;
+
 use crate::error::{Error, Result};
 
 /// Extension type code points.
@@ -90,6 +92,7 @@ pub fn decode_block(buf: &[u8]) -> Result<Vec<Extension>> {
         return Err(Error::Decode("trailing bytes after extensions block".to_owned()));
     }
     let mut extensions: Vec<Extension> = Vec::new();
+    let mut seen = HashSet::new();
     let mut pos = 0;
     while pos < body.len() {
         if pos + 4 > body.len() {
@@ -102,7 +105,7 @@ pub fn decode_block(buf: &[u8]) -> Result<Vec<Extension>> {
             .get(start..start + len)
             .ok_or(Error::Truncated("extension data"))?
             .to_vec();
-        if find(&extensions, extension_type).is_some() {
+        if !seen.insert(extension_type) {
             return Err(Error::Decode(format!(
                 "duplicate extension type {extension_type}"
             )));

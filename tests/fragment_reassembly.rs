@@ -247,3 +247,38 @@ fn rejects_fragment_length_mismatch() {
         .feed(0, &header(msg_type::CERTIFICATE, 0, 10, 0, 5), &[0u8; 4])
         .is_err());
 }
+
+#[test]
+fn many_tiny_interleaved_and_duplicate_fragments_reassemble_correctly() {
+    let mut r = Reassembler::new();
+    let body: Vec<u8> = (0..1200u32).map(|i| (i % 251) as u8).collect();
+    let len = body.len() as u32;
+    for offset in (0..len).step_by(2) {
+        let out = r
+            .feed(
+                0,
+                &header(msg_type::CERTIFICATE, 0, len, offset, 1),
+                &body[offset as usize..=offset as usize],
+            )
+            .unwrap();
+        assert!(out.is_empty());
+    }
+    let buffered = r.buffered_bytes();
+    for _ in 0..3 {
+        for offset in (0..len).step_by(2) {
+            r.feed(
+                0,
+                &header(msg_type::CERTIFICATE, 0, len, offset, 1),
+                &body[offset as usize..=offset as usize],
+            )
+            .unwrap();
+        }
+    }
+    assert_eq!(r.buffered_bytes(), buffered);
+    let out = r
+        .feed(0, &header(msg_type::CERTIFICATE, 0, len, 0, len), &body)
+        .unwrap();
+    assert_eq!(out.len(), 1);
+    assert_eq!(out[0].body, body);
+    assert_eq!(r.buffered_bytes(), 0);
+}

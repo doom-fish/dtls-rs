@@ -202,3 +202,14 @@ fn extension_block_rejects_duplicates_and_trailing_bytes() {
     encoded.push(0);
     assert!(decode_block(&encoded).is_err());
 }
+
+#[test]
+fn extension_block_with_many_distinct_extensions_decodes() {
+    let mut block = Vec::new();
+    for extension_type in 0..4000u16 {
+        Extension::new(extension_type, Vec::new()).encode_into(&mut block);
+    }
+    let mut encoded = (block.len() as u16).to_be_bytes().to_vec();
+    encoded.extend_from_slice(&block);
+    assert_eq!(decode_block(&encoded).unwrap().len(), 4000);
+}
