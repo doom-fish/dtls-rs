@@ -25,8 +25,9 @@ pub enum Error {
     FingerprintMismatch,
     /// No mutually supported cipher suite, curve, or SRTP profile was found.
     Negotiation(&'static str),
-    /// The peer sent a fatal alert.
-    Alert(u8),
+    /// The peer sent a fatal alert or closed the connection.
+    #[allow(missing_docs)]
+    Alert { level: u8, description: u8 },
     /// The handshake exceeded the retransmission deadline.
     Timeout,
     /// A method was called while the connection was in the wrong state.
@@ -50,7 +51,9 @@ impl fmt::Display for Error {
             Self::BadSignature => f.write_str("peer signature verification failed"),
             Self::FingerprintMismatch => f.write_str("peer certificate fingerprint mismatch"),
             Self::Negotiation(what) => write!(f, "negotiation failed: no common {what}"),
-            Self::Alert(level) => write!(f, "peer sent fatal alert {level}"),
+            Self::Alert { level, description } => {
+                write!(f, "peer sent alert {description} (level {level})")
+            }
             Self::Timeout => f.write_str("handshake retransmission deadline exceeded"),
             Self::InvalidState(msg) => write!(f, "invalid state: {msg}"),
             Self::InvalidArgument(msg) => write!(f, "invalid argument: {msg}"),

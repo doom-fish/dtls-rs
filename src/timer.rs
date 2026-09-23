@@ -11,11 +11,15 @@ pub const INITIAL_RTO_MS: u64 = 1000;
 /// Maximum retransmission timeout in milliseconds.
 pub const MAX_RTO_MS: u64 = 60_000;
 
+#[allow(missing_docs)]
+pub const MAX_RETRANSMISSIONS: u32 = 6;
+
 /// Exponential-backoff retransmission timer.
 #[derive(Debug, Clone)]
 pub struct RetransmitTimer {
     rto_ms: u64,
     deadline_ms: Option<u64>,
+    expirations: u32,
 }
 
 impl Default for RetransmitTimer {
@@ -31,13 +35,15 @@ impl RetransmitTimer {
         Self {
             rto_ms: INITIAL_RTO_MS,
             deadline_ms: None,
+            expirations: 0,
         }
     }
 
     /// Arm the timer relative to `now_ms`, resetting the RTO to its initial value.
     pub fn arm(&mut self, now_ms: u64) {
         self.rto_ms = INITIAL_RTO_MS;
-        self.deadline_ms = Some(now_ms + self.rto_ms);
+        self.deadline_ms = Some(now_ms.saturating_add(self.rto_ms));
+        self.expirations = 0;
     }
 
     /// Disarm the timer (the expected flight arrived).
@@ -64,7 +70,8 @@ impl RetransmitTimer {
         match self.deadline_ms {
             Some(deadline) if now_ms >= deadline => {
                 self.rto_ms = (self.rto_ms * 2).min(MAX_RTO_MS);
-                self.deadline_ms = Some(now_ms + self.rto_ms);
+                self.deadline_ms = Some(now_ms.saturating_add(self.rto_ms));
+                self.expirations = self.expirations.saturating_add(1);
                 true
             }
             _ => false,
@@ -75,5 +82,11 @@ impl RetransmitTimer {
     #[must_use]
     pub fn rto_ms(&self) -> u64 {
         self.rto_ms
+    }
+
+    #[allow(missing_docs)]
+    #[must_use]
+    pub fn expirations(&self) -> u32 {
+        self.expirations
     }
 }

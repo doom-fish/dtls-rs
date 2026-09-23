@@ -23,16 +23,16 @@ use crate::record::DTLS_1_2;
 const ECDSA_SIGN: u8 = 64;
 
 /// Client handshake progress.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ClientPhase {
-    /// About to send the initial cookieless `ClientHello`.
-    Start,
-    /// Awaiting `HelloVerifyRequest`.
-    WaitHelloVerify,
-    /// Awaiting the server's `ServerHello..ServerHelloDone` flight.
-    WaitServerFlight,
-    /// Awaiting the server's `ChangeCipherSpec` + `Finished`.
-    WaitServerFinished,
+    WaitServerHello,
+    WaitCertificate,
+    WaitServerKeyExchange,
+    WaitCertificateRequest,
+    WaitServerHelloDone,
+    WaitChangeCipherSpec,
+    WaitFinished,
     /// Handshake complete.
     Done,
 }

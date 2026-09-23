@@ -16,14 +16,17 @@ use crate::extensions::signature_algorithms::ECDSA_SECP256R1_SHA256;
 use crate::record::DTLS_1_2;
 
 /// Server handshake progress.
+#[allow(missing_docs)]
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum ServerPhase {
-    /// Awaiting the initial cookieless `ClientHello` (will answer with `HVR`).
+    /// Awaiting a `ClientHello` with a valid cookie; any other `ClientHello`
+    /// is answered statelessly with `HVR`.
     WaitClientHello,
-    /// Awaiting the cookie-bearing `ClientHello`.
-    WaitClientHelloWithCookie,
-    /// Awaiting the client's `ClientKeyExchange` + `Finished` flight.
-    WaitClientFinished,
+    WaitCertificate,
+    WaitClientKeyExchange,
+    WaitCertificateVerify,
+    WaitChangeCipherSpec,
+    WaitFinished,
     /// Handshake complete.
     Done,
 }

@@ -2,13 +2,22 @@
 //!
 //! A flight is the set of handshake records a peer sends before it expects a
 //! reply. DTLS has no TCP underneath, so a lost flight must be retransmitted
-//! verbatim on timeout. [`Flight`] simply remembers the encoded record bytes of
-//! the most recent outbound flight so the connection can resend them.
+//! on timeout. [`Flight`] remembers the plaintext records of the most recent
+//! outbound flight so the connection can re-encode them with fresh record
+//! sequence numbers.
 
-/// The encoded records of one outbound flight.
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct FlightRecord {
+    pub content_type: u8,
+    pub epoch: u16,
+    pub plaintext: Vec<u8>,
+}
+
+/// The plaintext records of one outbound flight.
 #[derive(Debug, Default, Clone)]
 pub struct Flight {
-    records: Vec<Vec<u8>>,
+    records: Vec<FlightRecord>,
 }
 
 impl Flight {
@@ -20,9 +29,13 @@ impl Flight {
         }
     }
 
-    /// Add an encoded record to the flight.
-    pub fn push(&mut self, record: Vec<u8>) {
-        self.records.push(record);
+    /// Add a record to the flight.
+    pub fn push(&mut self, content_type: u8, epoch: u16, plaintext: Vec<u8>) {
+        self.records.push(FlightRecord {
+            content_type,
+            epoch,
+            plaintext,
+        });
     }
 
     /// Whether the flight has any records to send.
@@ -31,20 +44,10 @@ impl Flight {
         self.records.is_empty()
     }
 
-    /// Borrow the encoded records.
+    /// Borrow the records.
     #[must_use]
-    pub fn records(&self) -> &[Vec<u8>] {
+    pub fn records(&self) -> &[FlightRecord] {
         &self.records
-    }
-
-    /// Concatenate the records into a single datagram-friendly buffer.
-    #[must_use]
-    pub fn to_datagram(&self) -> Vec<u8> {
-        let mut out = Vec::new();
-        for record in &self.records {
-            out.extend_from_slice(record);
-        }
-        out
     }
 
     /// Clear the stored records.

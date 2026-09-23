@@ -21,18 +21,25 @@
 //! # Example
 //!
 //! ```no_run
+//! use std::net::SocketAddr;
+//!
 //! use dtls::{Config, Connection};
 //!
-//! let mut client = Connection::new(Config::client())?;
+//! let client_addr = SocketAddr::from(([127, 0, 0, 1], 50000));
+//! let server_addr = SocketAddr::from(([127, 0, 0, 1], 50001));
 //! let mut server = Connection::new(Config::server())?;
+//! let mut client = Connection::new(
+//!     Config::client().with_expected_peer_fingerprint(server.local_fingerprint()),
+//! )?;
+//! server.set_expected_peer_fingerprint(client.local_fingerprint())?;
 //!
 //! // Pump datagrams between the two until both report completion.
 //! while !(client.is_handshake_done() && server.is_handshake_done()) {
 //!     if let Some(dg) = client.poll_send() {
-//!         server.feed_recv(&dg, 0)?;
+//!         server.feed_recv(&dg, client_addr, 0)?;
 //!     }
 //!     if let Some(dg) = server.poll_send() {
-//!         client.feed_recv(&dg, 0)?;
+//!         client.feed_recv(&dg, server_addr, 0)?;
 //!     }
 //! }
 //! # Ok::<(), dtls::Error>(())
