@@ -2,7 +2,7 @@
 name = "dtls-rs"
 version = "0.1.0"
 edition = "2021"
-rust-version = "1.76"
+rust-version = "1.82"
 license = "MIT OR Apache-2.0"
 description = "Pure-Rust DTLS 1.2 (RFC 6347) over a memory-buffer transport, WebRTC DTLS-SRTP profile only — no socket I/O, caller-driven state machine"
 authors = ["Per Johansson <per@doom.fish>"]
