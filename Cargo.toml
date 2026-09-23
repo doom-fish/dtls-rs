@@ -30,8 +30,8 @@ crate-type = ["lib"]
 
 [dependencies]
 libc = "0.2"
-cryptokit-rs = { path = "../cryptokit-rs" }
-security-rs = { path = "../security-rs" }
+cryptokit-rs = { path = "../cryptokit-rs", version = ">=0.3, <0.4" }
+security-rs = { path = "../security-rs", version = ">=0.6, <0.7" }
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

@@ -59,7 +59,7 @@ impl EcdheKeyPair {
         let raw = uncompressed_point_to_raw(peer_point)?;
         let peer = P256KeyAgreementPublicKey::from_raw_representation(raw)?;
         let secret = self.private.shared_secret(&peer)?;
-        Ok(secret.as_bytes().to_vec())
+        Ok(secret.hazmat_raw_bytes().to_vec())
     }
 }
 

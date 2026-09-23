@@ -4,9 +4,7 @@ version = 3
 
 [[package]]
 name = "apple-cf"
-version = "0.9.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e7fd680cd0f3f02ee717b2014b26d18985c57b784384ba47213fcf8791e8c250"
+version = "0.11.0"
 dependencies = [
  "doom-fish-utils",
 ]
@@ -40,16 +38,15 @@ checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
 
 [[package]]
 name = "cryptokit-rs"
-version = "0.2.5"
+version = "0.3.0"
 dependencies = [
  "libc",
+ "zeroize",
 ]
 
 [[package]]
 name = "doom-fish-utils"
-version = "0.3.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a2f014d56e0b8ef916deeaa003fb711eb52879fae2701d86cc73953367b805ac"
+version = "0.4.1"
 dependencies = [
  "crossbeam-queue",
  "futures-util",
@@ -131,7 +128,7 @@ dependencies = [
 
 [[package]]
 name = "security-rs"
-version = "0.5.0"
+version = "0.6.0"
 dependencies = [
  "apple-cf",
  "base64",
@@ -139,6 +136,7 @@ dependencies = [
  "libc",
  "serde",
  "serde_json",
+ "zeroize",
 ]
 
 [[package]]
@@ -200,6 +198,12 @@ name = "unicode-ident"
 version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e6e4313cd5fcd3dad5cafa179702e2b244f760991f45397d14d4ebf38247da75"
+
+[[package]]
+name = "zeroize"
+version = "1.8.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b97154e67e32c85465826e8bcc1c59429aaaf107c1e4a9e53c8d8ccd5eff88d0"
 
 [[package]]
 name = "zmij"
