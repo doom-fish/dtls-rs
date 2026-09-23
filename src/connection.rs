@@ -31,7 +31,7 @@ use crate::handshake::{frame_message, CookieSecret, Reassembler};
 use crate::extensions::signature_algorithms::ECDSA_SECP256R1_SHA256;
 use crate::record::ciphertext::{self, AeadKeys};
 use crate::record::plaintext::HEADER_LEN;
-use crate::record::{content_type, EpochSeq, Record, DTLS_1_2};
+use crate::record::{content_type, EpochSeq, Record, ReplayWindow, DTLS_1_2};
 use crate::role::Role;
 use zeroize::Zeroizing;
 
@@ -69,6 +69,7 @@ pub struct Connection {
     epoch0_seq: EpochSeq,
     epoch1_seq: EpochSeq,
     peer_epoch: u16,
+    replay: ReplayWindow,
     reasm: Reassembler,
 
     outgoing: Vec<u8>,
@@ -118,6 +119,7 @@ impl Connection {
             epoch0_seq: EpochSeq::new(),
             epoch1_seq: EpochSeq::new(),
             peer_epoch: 0,
+            replay: ReplayWindow::new(),
             reasm: Reassembler::new(),
             outgoing: Vec::new(),
             last_flight: crate::handshake::flight::Flight::new(),
@@ -268,9 +270,9 @@ impl Connection {
     fn send_record(&mut self, content_type: u8, plaintext: Vec<u8>) -> Result<()> {
         let epoch = self.write_epoch;
         let sequence = if epoch == 0 {
-            self.epoch0_seq.take()
+            self.epoch0_seq.take()?
         } else {
-            self.epoch1_seq.take()
+            self.epoch1_seq.take()?
         };
         let fragment = if epoch == 0 {
             plaintext
@@ -317,17 +319,22 @@ impl Connection {
                 let plain = if record.epoch == 0 {
                     record.fragment.clone()
                 } else {
+                    if !self.replay.accepts(record.sequence) {
+                        return Ok(());
+                    }
                     let keys = self
                         .peer_write_keys()
                         .ok_or(Error::InvalidState("no read keys for epoch 1"))?;
-                    ciphertext::unprotect(
+                    let plain = ciphertext::unprotect(
                         keys,
                         record.epoch,
                         record.sequence,
                         content_type::HANDSHAKE,
                         DTLS_1_2,
                         &record.fragment,
-                    )?
+                    )?;
+                    self.replay.mark(record.sequence);
+                    plain
                 };
                 let header = HandshakeHeader::decode(&plain)?;
                 let end = HANDSHAKE_HEADER_LEN + header.fragment_length as usize;
@@ -335,9 +342,9 @@ impl Connection {
                     .get(HANDSHAKE_HEADER_LEN..end)
                     .ok_or(Error::Truncated("handshake fragment body"))?
                     .to_vec();
-                let delivered = self.reasm.feed(&header, &body)?;
-                for (mtype, seq, mbody) in delivered {
-                    self.on_handshake(mtype, seq, &mbody, now_ms)?;
+                let delivered = self.reasm.feed(record.epoch, &header, &body)?;
+                for message in delivered {
+                    self.on_handshake(message.msg_type, message.message_seq, &message.body, now_ms)?;
                 }
             }
             content_type::CHANGE_CIPHER_SPEC => {

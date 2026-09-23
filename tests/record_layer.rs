@@ -88,3 +88,37 @@ fn aes_gcm_record_rejects_wrong_sequence() {
     )
     .is_err());
 }
+
+#[test]
+fn replay_window_rejects_duplicates_and_stale_records() {
+    use dtls::record::epoch::REPLAY_WINDOW_SIZE;
+    use dtls::record::ReplayWindow;
+
+    let mut window = ReplayWindow::new();
+    assert!(window.accepts(5));
+    window.mark(5);
+    assert!(!window.accepts(5), "duplicate");
+    assert!(window.accepts(4), "older but inside the window");
+    window.mark(4);
+    assert!(!window.accepts(4));
+    assert!(window.accepts(6));
+    window.mark(100);
+    assert!(!window.accepts(100));
+    assert!(!window.accepts(100 - REPLAY_WINDOW_SIZE), "left of the window");
+    assert!(window.accepts(100 - REPLAY_WINDOW_SIZE + 1));
+    assert!(!window.accepts(5), "stale after the window moved");
+    window.mark(100 + 10 * REPLAY_WINDOW_SIZE);
+    assert!(window.accepts(100 + 10 * REPLAY_WINDOW_SIZE - 1));
+    assert!(!window.accepts(100));
+}
+
+#[test]
+fn record_sequence_numbers_do_not_wrap() {
+    use dtls::record::epoch::MAX_SEQUENCE;
+    use dtls::record::EpochSeq;
+
+    let mut seq = EpochSeq::starting_at(MAX_SEQUENCE);
+    assert_eq!(seq.take().unwrap(), MAX_SEQUENCE);
+    assert!(seq.take().is_err());
+    assert!(seq.take().is_err());
+}

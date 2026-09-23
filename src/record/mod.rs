@@ -20,5 +20,5 @@ pub mod content_type {
 }
 
 pub use ciphertext::AeadKeys;
-pub use epoch::EpochSeq;
+pub use epoch::{EpochSeq, ReplayWindow};
 pub use plaintext::Record;
