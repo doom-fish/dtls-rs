@@ -170,7 +170,7 @@ impl Reassembler {
             return Err(Error::Decode("fragment exceeds message length".to_owned()));
         }
         let Some(distance) = header.message_seq.checked_sub(self.next_seq) else {
-            return Ok(Vec::new());
+            return Ok(Vec::new()); // retransmit of an already-delivered message
         };
         if distance >= SEQUENCE_WINDOW {
             return Ok(Vec::new());

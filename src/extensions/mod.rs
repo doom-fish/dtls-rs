@@ -86,7 +86,10 @@ pub fn decode_block(buf: &[u8]) -> Result<Vec<Extension>> {
     let body = buf
         .get(2..2 + total)
         .ok_or(Error::Truncated("extensions block"))?;
-    let mut extensions = Vec::new();
+    if buf.len() != 2 + total {
+        return Err(Error::Decode("trailing bytes after extensions block".to_owned()));
+    }
+    let mut extensions: Vec<Extension> = Vec::new();
     let mut pos = 0;
     while pos < body.len() {
         if pos + 4 > body.len() {
@@ -99,6 +102,11 @@ pub fn decode_block(buf: &[u8]) -> Result<Vec<Extension>> {
             .get(start..start + len)
             .ok_or(Error::Truncated("extension data"))?
             .to_vec();
+        if find(&extensions, extension_type).is_some() {
+            return Err(Error::Decode(format!(
+                "duplicate extension type {extension_type}"
+            )));
+        }
         extensions.push(Extension::new(extension_type, data));
         pos = start + len;
     }

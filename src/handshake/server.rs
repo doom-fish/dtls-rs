@@ -1,16 +1,19 @@
 //! Server-role handshake phases and message builders.
 
 use crate::crypto::ecdsa_sign::EcdsaSigningKey;
-use crate::error::Result;
+use crate::error::{Error, Result};
 use crate::extensions::{
-    ec_point_formats, extended_master_secret, renegotiation_info, use_srtp, Extension,
+    ec_point_formats, ext_type, extended_master_secret, find, renegotiation_info,
+    supported_groups, use_srtp, Extension,
 };
+use crate::handshake::client::check_initial_renegotiation_info;
 use crate::handshake::messages::{
-    Certificate, HelloVerifyRequest, ServerHello, ServerKeyExchange,
+    Certificate, ClientHello, HelloVerifyRequest, ServerHello, ServerKeyExchange,
 };
 use crate::handshake::TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256;
 use crate::extensions::signature_algorithms;
 use crate::extensions::signature_algorithms::ECDSA_SECP256R1_SHA256;
+use crate::record::DTLS_1_2;
 
 /// Server handshake progress.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -42,6 +45,7 @@ pub fn build_server_hello(random: [u8; 32], cipher_suite: u16, srtp_code: Option
     extensions.push(extended_master_secret::build());
     extensions.push(renegotiation_info::build());
     ServerHello {
+        version: DTLS_1_2,
         random,
         session_id: Vec::new(),
         cipher_suite,
@@ -131,11 +135,56 @@ pub fn negotiate_srtp(offered: &[u16], preferred: &[u16]) -> Option<u16> {
 /// Choose a cipher suite present in the client's offer that we support.
 #[must_use]
 pub fn negotiate_cipher_suite(offered: &[u16]) -> Option<u16> {
-    use crate::handshake::TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256;
-    [
-        TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256,
-        TLS_ECDHE_RSA_WITH_AES_128_GCM_SHA256,
-    ]
-    .into_iter()
-    .find(|suite| offered.contains(suite))
+    offered
+        .contains(&TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)
+        .then_some(TLS_ECDHE_ECDSA_WITH_AES_128_GCM_SHA256)
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct ClientHelloChoice {
+    pub cipher_suite: u16,
+    pub srtp_profile: Option<u16>,
+}
+
+#[allow(missing_docs)]
+pub fn check_client_hello(hello: &ClientHello, preferred_srtp: &[u16]) -> Result<ClientHelloChoice> {
+    let [major, minor] = hello.version.to_be_bytes();
+    if major != 0xFE || minor > 0xFD {
+        return Err(Error::Negotiation("protocol version"));
+    }
+    if !hello.compression_methods.contains(&0) {
+        return Err(Error::Negotiation("compression method"));
+    }
+    let cipher_suite =
+        negotiate_cipher_suite(&hello.cipher_suites).ok_or(Error::Negotiation("cipher suite"))?;
+    let ems = find(&hello.extensions, ext_type::EXTENDED_MASTER_SECRET)
+        .ok_or(Error::Negotiation("extended_master_secret support"))?;
+    if !ems.data.is_empty() {
+        return Err(Error::Decode("extended_master_secret carries data".to_owned()));
+    }
+    if let Some(groups) = find(&hello.extensions, ext_type::SUPPORTED_GROUPS) {
+        if !supported_groups::parse(&groups.data)?.contains(&supported_groups::SECP256R1) {
+            return Err(Error::Negotiation("ECDHE curve"));
+        }
+    }
+    if let Some(formats) = find(&hello.extensions, ext_type::EC_POINT_FORMATS) {
+        if !ec_point_formats::parse(&formats.data)?.contains(&ec_point_formats::UNCOMPRESSED) {
+            return Err(Error::Negotiation("EC point format"));
+        }
+    }
+    if let Some(algorithms) = find(&hello.extensions, ext_type::SIGNATURE_ALGORITHMS) {
+        if !signature_algorithms::parse(&algorithms.data)?.contains(&ECDSA_SECP256R1_SHA256) {
+            return Err(Error::Negotiation("signature algorithm"));
+        }
+    }
+    check_initial_renegotiation_info(&hello.extensions)?;
+    let srtp_profile = match find(&hello.extensions, ext_type::USE_SRTP) {
+        Some(extension) => negotiate_srtp(&use_srtp::parse(&extension.data)?.profiles, preferred_srtp),
+        None => None,
+    };
+    Ok(ClientHelloChoice {
+        cipher_suite,
+        srtp_profile,
+    })
 }

@@ -8,6 +8,7 @@
 
 use crate::error::{Error, Result};
 use crate::extensions::{decode_block, encode_block, Extension};
+use crate::handshake::keyschedule::VERIFY_DATA_LEN;
 use crate::record::DTLS_1_2;
 
 /// Handshake message type code points.
@@ -147,6 +148,14 @@ impl<'a> Cursor<'a> {
         Ok(u24(b))
     }
 
+    fn finish(&self, what: &'static str) -> Result<()> {
+        if self.remaining() == 0 {
+            Ok(())
+        } else {
+            Err(Error::Decode(format!("trailing bytes after {what}")))
+        }
+    }
+
     /// Read a vector whose length prefix is `len_bytes` wide.
     fn vector(&mut self, len_bytes: usize, what: &'static str) -> Result<&'a [u8]> {
         let len = match len_bytes {
@@ -162,6 +171,8 @@ impl<'a> Cursor<'a> {
 /// `ClientHello` handshake message.
 #[derive(Debug, Clone)]
 pub struct ClientHello {
+    #[allow(missing_docs)]
+    pub version: u16,
     /// 32-byte client random.
     pub random: [u8; 32],
     /// Session id (empty for a fresh handshake).
@@ -181,7 +192,7 @@ impl ClientHello {
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        out.extend_from_slice(&DTLS_1_2.to_be_bytes());
+        out.extend_from_slice(&self.version.to_be_bytes());
         out.extend_from_slice(&self.random);
         out.push(self.session_id.len() as u8);
         out.extend_from_slice(&self.session_id);
@@ -204,7 +215,7 @@ impl ClientHello {
     /// Returns an error on truncated or malformed input.
     pub fn decode(body: &[u8]) -> Result<Self> {
         let mut c = Cursor::new(body);
-        let _version = c.u16("client_hello version")?;
+        let version = c.u16("client_hello version")?;
         let random_slice = c.take(32, "client_hello random")?;
         let mut random = [0u8; 32];
         random.copy_from_slice(random_slice);
@@ -219,12 +230,9 @@ impl ClientHello {
             .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
             .collect();
         let compression_methods = c.vector(1, "compression_methods")?.to_vec();
-        let extensions = if c.remaining() > 0 {
-            decode_block(c.take(c.remaining(), "extensions")?)?
-        } else {
-            Vec::new()
-        };
+        let extensions = decode_block(c.take(c.remaining(), "extensions")?)?;
         Ok(Self {
+            version,
             random,
             session_id,
             cookie,
@@ -262,6 +270,7 @@ impl HelloVerifyRequest {
         let mut c = Cursor::new(body);
         let _version = c.u16("hvr version")?;
         let cookie = c.vector(1, "hvr cookie")?.to_vec();
+        c.finish("hello_verify_request")?;
         Ok(Self { cookie })
     }
 }
@@ -269,6 +278,8 @@ impl HelloVerifyRequest {
 /// `ServerHello` handshake message.
 #[derive(Debug, Clone)]
 pub struct ServerHello {
+    #[allow(missing_docs)]
+    pub version: u16,
     /// 32-byte server random.
     pub random: [u8; 32],
     /// Session id (empty).
@@ -286,7 +297,7 @@ impl ServerHello {
     #[must_use]
     pub fn encode(&self) -> Vec<u8> {
         let mut out = Vec::new();
-        out.extend_from_slice(&DTLS_1_2.to_be_bytes());
+        out.extend_from_slice(&self.version.to_be_bytes());
         out.extend_from_slice(&self.random);
         out.push(self.session_id.len() as u8);
         out.extend_from_slice(&self.session_id);
@@ -303,19 +314,16 @@ impl ServerHello {
     /// Returns an error on truncated or malformed input.
     pub fn decode(body: &[u8]) -> Result<Self> {
         let mut c = Cursor::new(body);
-        let _version = c.u16("server_hello version")?;
+        let version = c.u16("server_hello version")?;
         let random_slice = c.take(32, "server_hello random")?;
         let mut random = [0u8; 32];
         random.copy_from_slice(random_slice);
         let session_id = c.vector(1, "session_id")?.to_vec();
         let cipher_suite = c.u16("cipher_suite")?;
         let compression_method = c.u8("compression_method")?;
-        let extensions = if c.remaining() > 0 {
-            decode_block(c.take(c.remaining(), "extensions")?)?
-        } else {
-            Vec::new()
-        };
+        let extensions = decode_block(c.take(c.remaining(), "extensions")?)?;
         Ok(Self {
+            version,
             random,
             session_id,
             cipher_suite,
@@ -355,10 +363,15 @@ impl Certificate {
     pub fn decode(body: &[u8]) -> Result<Self> {
         let mut c = Cursor::new(body);
         let list = c.vector(3, "certificate_list")?;
+        c.finish("certificate_list")?;
         let mut inner = Cursor::new(list);
         let mut certificates = Vec::new();
         while inner.remaining() > 0 {
-            certificates.push(inner.vector(3, "certificate")?.to_vec());
+            let certificate = inner.vector(3, "certificate")?;
+            if certificate.is_empty() {
+                return Err(Error::Decode("empty certificate entry".to_owned()));
+            }
+            certificates.push(certificate.to_vec());
         }
         Ok(Self { certificates })
     }
@@ -416,6 +429,7 @@ impl ServerKeyExchange {
         let public_point = c.vector(1, "ecdh public")?.to_vec();
         let signature_algorithm = c.u16("signature_algorithm")?;
         let signature = c.vector(2, "signature")?.to_vec();
+        c.finish("server_key_exchange")?;
         Ok(Self {
             named_curve,
             public_point,
@@ -450,6 +464,7 @@ impl ClientKeyExchange {
     pub fn decode(body: &[u8]) -> Result<Self> {
         let mut c = Cursor::new(body);
         let public_point = c.vector(1, "ecdh Yc")?.to_vec();
+        c.finish("client_key_exchange")?;
         Ok(Self { public_point })
     }
 }
@@ -483,9 +498,56 @@ impl CertificateVerify {
         let mut c = Cursor::new(body);
         let signature_algorithm = c.u16("signature_algorithm")?;
         let signature = c.vector(2, "signature")?.to_vec();
+        c.finish("certificate_verify")?;
         Ok(Self {
             signature_algorithm,
             signature,
+        })
+    }
+}
+
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct CertificateRequest {
+    pub certificate_types: Vec<u8>,
+    pub signature_algorithms: Vec<u16>,
+    pub certificate_authorities: Vec<u8>,
+}
+
+impl CertificateRequest {
+    #[allow(missing_docs)]
+    #[must_use]
+    pub fn encode(&self) -> Vec<u8> {
+        let mut out = Vec::new();
+        out.push(self.certificate_types.len() as u8);
+        out.extend_from_slice(&self.certificate_types);
+        out.extend_from_slice(&((self.signature_algorithms.len() * 2) as u16).to_be_bytes());
+        for algorithm in &self.signature_algorithms {
+            out.extend_from_slice(&algorithm.to_be_bytes());
+        }
+        out.extend_from_slice(&(self.certificate_authorities.len() as u16).to_be_bytes());
+        out.extend_from_slice(&self.certificate_authorities);
+        out
+    }
+
+    #[allow(missing_docs)]
+    pub fn decode(body: &[u8]) -> Result<Self> {
+        let mut c = Cursor::new(body);
+        let certificate_types = c.vector(1, "certificate_types")?.to_vec();
+        let algorithms = c.vector(2, "supported_signature_algorithms")?;
+        if algorithms.len() % 2 != 0 {
+            return Err(Error::Decode("odd supported_signature_algorithms length".to_owned()));
+        }
+        let signature_algorithms = algorithms
+            .chunks_exact(2)
+            .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+            .collect();
+        let certificate_authorities = c.vector(2, "certificate_authorities")?.to_vec();
+        c.finish("certificate_request")?;
+        Ok(Self {
+            certificate_types,
+            signature_algorithms,
+            certificate_authorities,
         })
     }
 }
@@ -505,10 +567,15 @@ impl Finished {
     }
 
     /// Decode the message body.
-    #[must_use]
-    pub fn decode(body: &[u8]) -> Self {
-        Self {
-            verify_data: body.to_vec(),
+    pub fn decode(body: &[u8]) -> Result<Self> {
+        if body.len() != VERIFY_DATA_LEN {
+            return Err(Error::Decode(format!(
+                "Finished verify_data must be {VERIFY_DATA_LEN} bytes, got {}",
+                body.len()
+            )));
         }
+        Ok(Self {
+            verify_data: body.to_vec(),
+        })
     }
 }

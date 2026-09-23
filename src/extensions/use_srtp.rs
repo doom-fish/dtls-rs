@@ -21,25 +21,39 @@ pub fn build(profiles: &[u16]) -> Extension {
     Extension::new(ext_type::USE_SRTP, data)
 }
 
-/// Parse the list of offered SRTP protection profiles.
-///
-/// # Errors
-///
-/// Returns an error if the extension data is malformed.
-pub fn parse_profiles(data: &[u8]) -> Result<Vec<u16>> {
+#[allow(missing_docs)]
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct UseSrtp {
+    pub profiles: Vec<u16>,
+    pub mki: Vec<u8>,
+}
+
+#[allow(missing_docs)]
+pub fn parse(data: &[u8]) -> Result<UseSrtp> {
     if data.len() < 2 {
         return Err(Error::Truncated("use_srtp profiles length"));
     }
     let len = u16::from_be_bytes([data[0], data[1]]) as usize;
-    if len % 2 != 0 {
-        return Err(Error::Decode("use_srtp profiles length not even".to_owned()));
+    if len == 0 || len % 2 != 0 {
+        return Err(Error::Decode(
+            "use_srtp profiles length must be even and non-zero".to_owned(),
+        ));
     }
     let body = data
         .get(2..2 + len)
         .ok_or(Error::Truncated("use_srtp profiles"))?;
-    let mut profiles = Vec::with_capacity(len / 2);
-    for chunk in body.chunks_exact(2) {
-        profiles.push(u16::from_be_bytes([chunk[0], chunk[1]]));
+    let (&mki_len, mki) = data[2 + len..]
+        .split_first()
+        .ok_or(Error::Truncated("use_srtp mki"))?;
+    if mki.len() != usize::from(mki_len) {
+        return Err(Error::Decode("use_srtp mki length mismatch".to_owned()));
     }
-    Ok(profiles)
+    let profiles = body
+        .chunks_exact(2)
+        .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+        .collect();
+    Ok(UseSrtp {
+        profiles,
+        mki: mki.to_vec(),
+    })
 }

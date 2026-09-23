@@ -16,7 +16,6 @@ use crate::crypto::hash::sha256;
 use crate::error::{Error, Result};
 use crate::crypto::constant_time_eq;
 use crate::exporter::{export_keying_material, ExportedKeyingMaterial};
-use crate::extensions::{find, use_srtp};
 use crate::handshake::client::{self, ClientPhase};
 use crate::handshake::keyschedule::{
     client_finished_verify_data, derive_keys, extended_master_secret, server_finished_verify_data,
@@ -421,9 +420,11 @@ impl Connection {
             msg_type::SERVER_HELLO => {
                 self.append_transcript(mtype, 1, body);
                 let sh = ServerHello::decode(body)?;
+                let offered: Vec<u16> =
+                    self.config.srtp_profiles.iter().map(|p| p.code()).collect();
+                self.srtp_code = client::check_server_hello(&sh, &offered)?;
                 self.server_random = Some(sh.random);
                 self.cipher_suite = Some(sh.cipher_suite);
-                self.srtp_code = client::selected_srtp(&sh.extensions);
                 Ok(())
             }
             msg_type::CERTIFICATE => {
@@ -462,11 +463,15 @@ impl Connection {
                 let server_random = self
                     .server_random
                     .ok_or(Error::InvalidState("no ServerHello before SKE"))?;
+                let cipher_suite = self
+                    .cipher_suite
+                    .ok_or(Error::InvalidState("no ServerHello before SKE"))?;
                 client::verify_server_key_exchange(
                     peer_key,
                     leaf,
                     &client_random,
                     &server_random,
+                    cipher_suite,
                     &ske,
                 )?;
                 self.peer_eph_point = Some(ske.public_point);
@@ -567,19 +572,13 @@ impl Connection {
                 self.append_transcript(msg_type::CLIENT_HELLO, seq, body);
                 self.client_random = Some(ch.random);
 
-                let cipher_suite = server::negotiate_cipher_suite(&ch.cipher_suites)
-                    .ok_or(Error::Negotiation("cipher suite"))?;
-                self.cipher_suite = Some(cipher_suite);
-
-                let offered = find(&ch.extensions, crate::extensions::ext_type::USE_SRTP)
-                    .map(|ext| use_srtp::parse_profiles(&ext.data))
-                    .transpose()?
-                    .unwrap_or_default();
                 let preferred: Vec<u16> =
                     self.config.srtp_profiles.iter().map(|p| p.code()).collect();
-                self.srtp_code = server::negotiate_srtp(&offered, &preferred);
+                let choice = server::check_client_hello(&ch, &preferred)?;
+                self.cipher_suite = Some(choice.cipher_suite);
+                self.srtp_code = choice.srtp_profile;
 
-                self.send_server_flight(cipher_suite, now_ms)
+                self.send_server_flight(choice.cipher_suite, now_ms)
             }
             ServerPhase::WaitClientFinished => self.server_client_finish(mtype, seq, body),
             _ => Err(Error::UnexpectedMessage(format!(

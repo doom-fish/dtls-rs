@@ -1,5 +1,7 @@
 //! `signature_algorithms` extension (RFC 5246 §7.4.1.4.1 / RFC 8446 codepoints).
 
+use crate::error::{Error, Result};
+
 use super::{ext_type, Extension};
 
 /// `ecdsa_secp256r1_sha256`.
@@ -18,4 +20,19 @@ pub fn build(schemes: &[u16]) -> Extension {
         data.extend_from_slice(&scheme.to_be_bytes());
     }
     Extension::new(ext_type::SIGNATURE_ALGORITHMS, data)
+}
+
+#[allow(missing_docs)]
+pub fn parse(data: &[u8]) -> Result<Vec<u16>> {
+    if data.len() < 2 {
+        return Err(Error::Truncated("signature_algorithms length"));
+    }
+    let len = u16::from_be_bytes([data[0], data[1]]) as usize;
+    if len % 2 != 0 || data.len() != 2 + len {
+        return Err(Error::Decode("malformed signature_algorithms list".to_owned()));
+    }
+    Ok(data[2..]
+        .chunks_exact(2)
+        .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
+        .collect())
 }

@@ -31,6 +31,9 @@ pub fn parse(data: &[u8]) -> Result<Vec<u16>> {
     let body = data
         .get(2..2 + len)
         .ok_or(Error::Truncated("supported_groups list"))?;
+    if len % 2 != 0 || data.len() != 2 + len {
+        return Err(Error::Decode("malformed supported_groups list".to_owned()));
+    }
     Ok(body
         .chunks_exact(2)
         .map(|chunk| u16::from_be_bytes([chunk[0], chunk[1]]))
