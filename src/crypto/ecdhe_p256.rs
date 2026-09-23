@@ -7,6 +7,7 @@
 //! coordinate of the shared point.
 
 use cryptokit::p256::{P256KeyAgreementPrivateKey, P256KeyAgreementPublicKey};
+use zeroize::Zeroizing;
 
 use crate::error::{Error, Result};
 
@@ -55,11 +56,11 @@ impl EcdheKeyPair {
     /// # Errors
     ///
     /// Returns an error if the point is malformed or key agreement fails.
-    pub fn agree(&self, peer_point: &[u8]) -> Result<Vec<u8>> {
+    pub fn agree(&self, peer_point: &[u8]) -> Result<Zeroizing<Vec<u8>>> {
         let raw = uncompressed_point_to_raw(peer_point)?;
         let peer = P256KeyAgreementPublicKey::from_raw_representation(raw)?;
         let secret = self.private.shared_secret(&peer)?;
-        Ok(secret.hazmat_raw_bytes().to_vec())
+        Ok(secret.hazmat_raw_bytes())
     }
 }
 

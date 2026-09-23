@@ -14,7 +14,8 @@ use crate::config::{Config, SrtpProfile};
 use crate::crypto::ecdhe_p256::EcdheKeyPair;
 use crate::crypto::hash::sha256;
 use crate::error::{Error, Result};
-use crate::exporter::export_keying_material;
+use crate::crypto::constant_time_eq;
+use crate::exporter::{export_keying_material, ExportedKeyingMaterial};
 use crate::extensions::{find, use_srtp};
 use crate::handshake::client::{self, ClientPhase};
 use crate::handshake::keyschedule::{
@@ -32,6 +33,7 @@ use crate::record::ciphertext::{self, AeadKeys};
 use crate::record::plaintext::HEADER_LEN;
 use crate::record::{content_type, EpochSeq, Record, DTLS_1_2};
 use crate::role::Role;
+use zeroize::Zeroizing;
 
 /// A peer identity bound into the stateless cookie. For the in-process loopback
 /// profile both endpoints use the same constant; a server fronting many peers
@@ -60,7 +62,7 @@ pub struct Connection {
     srtp_code: Option<u16>,
 
     transcript: Vec<u8>,
-    master_secret: Option<[u8; 48]>,
+    master_secret: Option<Zeroizing<[u8; 48]>>,
     keys: Option<KeyMaterial>,
 
     write_epoch: u16,
@@ -182,9 +184,10 @@ impl Connection {
         label: &[u8],
         context: Option<&[u8]>,
         length: usize,
-    ) -> Result<Vec<u8>> {
+    ) -> Result<ExportedKeyingMaterial> {
         let master = self
             .master_secret
+            .as_ref()
             .ok_or(Error::InvalidState("master secret not established"))?;
         let client_random = self
             .client_random
@@ -193,7 +196,7 @@ impl Connection {
             .server_random
             .ok_or(Error::InvalidState("server random unknown"))?;
         export_keying_material(
-            &master,
+            master.as_slice(),
             &client_random,
             &server_random,
             label,
@@ -246,19 +249,19 @@ impl Connection {
         self.timer.arm(0);
     }
 
-    fn my_write_keys(&self) -> Option<AeadKeys> {
+    fn my_write_keys(&self) -> Option<&AeadKeys> {
         let km = self.keys.as_ref()?;
         Some(match self.role {
-            Role::Client => km.client.clone(),
-            Role::Server => km.server.clone(),
+            Role::Client => &km.client,
+            Role::Server => &km.server,
         })
     }
 
-    fn peer_write_keys(&self) -> Option<AeadKeys> {
+    fn peer_write_keys(&self) -> Option<&AeadKeys> {
         let km = self.keys.as_ref()?;
         Some(match self.role {
-            Role::Client => km.server.clone(),
-            Role::Server => km.client.clone(),
+            Role::Client => &km.server,
+            Role::Server => &km.client,
         })
     }
 
@@ -275,7 +278,7 @@ impl Connection {
             let keys = self
                 .my_write_keys()
                 .ok_or(Error::InvalidState("no write keys for epoch 1"))?;
-            ciphertext::protect(&keys, epoch, sequence, content_type, DTLS_1_2, &plaintext)?
+            ciphertext::protect(keys, epoch, sequence, content_type, DTLS_1_2, &plaintext)?
         };
         let encoded = Record::new(content_type, epoch, sequence, fragment).encode();
         self.outgoing.extend_from_slice(&encoded);
@@ -318,7 +321,7 @@ impl Connection {
                         .peer_write_keys()
                         .ok_or(Error::InvalidState("no read keys for epoch 1"))?;
                     ciphertext::unprotect(
-                        &keys,
+                        keys,
                         record.epoch,
                         record.sequence,
                         content_type::HANDSHAKE,
@@ -379,9 +382,12 @@ impl Connection {
             }
             ClientPhase::WaitServerFlight => self.client_server_flight(mtype, seq, body, now_ms),
             ClientPhase::WaitServerFinished if mtype == msg_type::FINISHED => {
-                let master = self.master_secret.expect("master secret set");
-                let expected = server_finished_verify_data(&master, &self.transcript)?;
-                if body != expected.as_slice() {
+                let master = self
+                    .master_secret
+                    .as_ref()
+                    .ok_or(Error::InvalidState("no master secret before Finished"))?;
+                let expected = server_finished_verify_data(master.as_slice(), &self.transcript)?;
+                if !constant_time_eq(body, &expected) {
                     return Err(Error::BadFinished);
                 }
                 self.append_transcript(msg_type::FINISHED, seq, body);
@@ -501,8 +507,7 @@ impl Connection {
         // ClientKeyExchange (RFC 7627).
         let session_hash = sha256(&self.transcript)?;
         let master = extended_master_secret(&premaster, &session_hash)?;
-        self.master_secret = Some(master);
-        self.keys = Some(derive_keys(&master, &server_random, &client_random)?);
+        self.keys = Some(derive_keys(master.as_slice(), &server_random, &client_random)?);
 
         // CertificateVerify (message_seq 4): sign the transcript so far
         // (ClientHello..ClientKeyExchange) with our certificate's private key.
@@ -515,7 +520,8 @@ impl Connection {
         self.send_handshake(msg_type::CERTIFICATE_VERIFY, 4, &cert_verify, true)?;
 
         // Finished (message_seq 5) over the transcript through CertificateVerify.
-        let verify_data = client_finished_verify_data(&master, &self.transcript)?;
+        let verify_data = client_finished_verify_data(master.as_slice(), &self.transcript)?;
+        self.master_secret = Some(master);
         self.send_change_cipher_spec()?;
         let finished = Finished { verify_data }.encode();
         self.send_handshake(msg_type::FINISHED, 5, &finished, true)?;
@@ -641,9 +647,11 @@ impl Connection {
                 let session_hash = sha256(&self.transcript)?;
                 let master = extended_master_secret(&premaster, &session_hash)?;
                 let server_random = self.local_random;
-                let client_random = self.client_random.expect("client random set");
+                let client_random = self
+                    .client_random
+                    .ok_or(Error::InvalidState("no client random before ClientKeyExchange"))?;
+                self.keys = Some(derive_keys(master.as_slice(), &server_random, &client_random)?);
                 self.master_secret = Some(master);
-                self.keys = Some(derive_keys(&master, &server_random, &client_random)?);
                 Ok(())
             }
             msg_type::CERTIFICATE_VERIFY => {
@@ -669,15 +677,16 @@ impl Connection {
             msg_type::FINISHED => {
                 let master = self
                     .master_secret
+                    .clone()
                     .ok_or(Error::InvalidState("no master secret before Finished"))?;
-                let expected = client_finished_verify_data(&master, &self.transcript)?;
-                if body != expected.as_slice() {
+                let expected = client_finished_verify_data(master.as_slice(), &self.transcript)?;
+                if !constant_time_eq(body, &expected) {
                     return Err(Error::BadFinished);
                 }
                 self.append_transcript(msg_type::FINISHED, seq, body);
 
                 self.last_flight.clear();
-                let verify_data = server_finished_verify_data(&master, &self.transcript)?;
+                let verify_data = server_finished_verify_data(master.as_slice(), &self.transcript)?;
                 self.send_change_cipher_spec()?;
                 let finished = Finished { verify_data }.encode();
                 self.send_handshake(msg_type::FINISHED, 6, &finished, true)?;

@@ -7,16 +7,33 @@
 //! `seq_num(8) || type(1) || version(2) || length(2)` where `seq_num` is
 //! `epoch(2) || sequence(6)` and `length` is the plaintext length.
 
+use std::fmt;
+
+use zeroize::Zeroize;
+
 use crate::crypto::aes_gcm;
 use crate::error::{Error, Result};
 
 /// One direction's AES-128-GCM key material.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct AeadKeys {
     /// 16-byte AES key.
     pub key: [u8; 16],
     /// 4-byte implicit nonce salt.
     pub salt: [u8; 4],
+}
+
+impl fmt::Debug for AeadKeys {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("AeadKeys { key: [REDACTED], salt: [REDACTED] }")
+    }
+}
+
+impl Drop for AeadKeys {
+    fn drop(&mut self) {
+        self.key.zeroize();
+        self.salt.zeroize();
+    }
 }
 
 /// Encode `epoch || sequence` as the 8-byte AEAD sequence number / nonce.

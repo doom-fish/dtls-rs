@@ -5,15 +5,32 @@
 //! Because the cookie is a keyed MAC over the client's own parameters, the
 //! server need not store per-client state between the two `ClientHello`s.
 
+use std::fmt;
+
+use zeroize::Zeroize;
+
+use crate::crypto::constant_time_eq;
 use crate::crypto::hmac::hmac_sha256;
 
 /// Maximum DTLS cookie length.
 pub const MAX_COOKIE_LEN: usize = 32;
 
 /// A per-process secret used to key the cookie MAC.
-#[derive(Debug, Clone)]
+#[derive(Clone)]
 pub struct CookieSecret {
     secret: [u8; 32],
+}
+
+impl fmt::Debug for CookieSecret {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("CookieSecret([REDACTED])")
+    }
+}
+
+impl Drop for CookieSecret {
+    fn drop(&mut self) {
+        self.secret.zeroize();
+    }
 }
 
 impl CookieSecret {
@@ -53,13 +70,6 @@ impl CookieSecret {
         cookie: &[u8],
     ) -> crate::error::Result<bool> {
         let expected = self.compute(peer_id, client_hello_body)?;
-        if expected.len() != cookie.len() {
-            return Ok(false);
-        }
-        let mut diff = 0u8;
-        for (a, b) in expected.iter().zip(cookie) {
-            diff |= a ^ b;
-        }
-        Ok(diff == 0)
+        Ok(constant_time_eq(&expected, cookie))
     }
 }

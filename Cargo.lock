@@ -59,6 +59,7 @@ dependencies = [
  "cryptokit-rs",
  "libc",
  "security-rs",
+ "zeroize",
 ]
 
 [[package]]

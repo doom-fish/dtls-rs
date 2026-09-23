@@ -66,3 +66,4 @@ pub use config::{Config, SrtpProfile};
 pub use connection::Connection;
 pub use error::{Error, Result};
 pub use role::Role;
+pub use zeroize::Zeroizing;

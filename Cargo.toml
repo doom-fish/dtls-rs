@@ -32,6 +32,7 @@ crate-type = ["lib"]
 libc = "0.2"
 cryptokit-rs = { path = "../cryptokit-rs", version = ">=0.3, <0.4" }
 security-rs = { path = "../security-rs", version = ">=0.6, <0.7" }
+zeroize = ">=1.6, <1.9"
 
 [lints.clippy]
 pedantic = { level = "warn", priority = -1 }

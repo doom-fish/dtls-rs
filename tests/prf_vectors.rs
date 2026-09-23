@@ -21,5 +21,12 @@ fn tls12_prf_sha256_known_answer() {
          87347b66",
     );
     let got = prf_sha256(&secret, b"test label", &seed, 100).unwrap();
-    assert_eq!(got, want);
+    assert_eq!(got.as_slice(), want.as_slice());
+}
+
+#[test]
+fn prf_rejects_oversized_output() {
+    let err = prf_sha256(b"secret", b"label", b"seed", dtls::crypto::prf::MAX_OUTPUT_LEN + 1)
+        .unwrap_err();
+    assert!(matches!(err, dtls::Error::InvalidArgument(_)));
 }

@@ -61,7 +61,7 @@ fn exporter_matches_prf_with_dtls_srtp_label() {
     seed.extend_from_slice(&client_random);
     seed.extend_from_slice(&server_random);
     let want = prf_sha256(&ms, DTLS_SRTP_LABEL, &seed, 60).unwrap();
-    assert_eq!(out, want);
+    assert_eq!(&out[..], want.as_slice());
 }
 
 #[test]
@@ -86,5 +86,20 @@ fn exporter_context_is_length_prefixed() {
     seed.extend_from_slice(&(context.len() as u16).to_be_bytes());
     seed.extend_from_slice(context);
     let want = prf_sha256(&ms, DTLS_SRTP_LABEL, &seed, 16).unwrap();
-    assert_eq!(out, want);
+    assert_eq!(&out[..], want.as_slice());
+}
+
+#[test]
+fn exporter_rejects_oversized_context() {
+    let context = vec![0u8; usize::from(u16::MAX) + 1];
+    let err = export_keying_material(
+        &[0x11u8; 48],
+        &[0x22u8; 32],
+        &[0x33u8; 32],
+        DTLS_SRTP_LABEL,
+        Some(&context),
+        16,
+    )
+    .unwrap_err();
+    assert!(matches!(err, dtls::Error::InvalidArgument(_)));
 }

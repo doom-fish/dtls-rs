@@ -36,3 +36,13 @@ pub fn random_bytes(len: usize) -> Result<Vec<u8>> {
     let bytes = security::SecureRandom::bytes(len)?;
     Ok(bytes)
 }
+
+#[allow(missing_docs)]
+#[must_use]
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let diff = a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y));
+    core::hint::black_box(diff) == 0
+}

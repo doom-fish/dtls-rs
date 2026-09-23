@@ -31,6 +31,8 @@ pub enum Error {
     Timeout,
     /// A method was called while the connection was in the wrong state.
     InvalidState(&'static str),
+    #[allow(missing_docs)]
+    InvalidArgument(&'static str),
     /// An underlying CryptoKit operation failed.
     Crypto(String),
     /// An underlying Security.framework operation failed.
@@ -51,6 +53,7 @@ impl fmt::Display for Error {
             Self::Alert(level) => write!(f, "peer sent fatal alert {level}"),
             Self::Timeout => f.write_str("handshake retransmission deadline exceeded"),
             Self::InvalidState(msg) => write!(f, "invalid state: {msg}"),
+            Self::InvalidArgument(msg) => write!(f, "invalid argument: {msg}"),
             Self::Crypto(msg) => write!(f, "crypto error: {msg}"),
             Self::Security(msg) => write!(f, "security framework error: {msg}"),
         }
