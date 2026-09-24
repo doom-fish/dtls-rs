@@ -41,6 +41,7 @@ name = "cryptokit-rs"
 version = "0.3.0"
 dependencies = [
  "libc",
+ "security-rs",
  "zeroize",
 ]
 
