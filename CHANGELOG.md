@@ -74,6 +74,9 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   2 × (16 + 12) = 56.
 - A malformed ServerKeyExchange or client flight returned an error instead of
   panicking on a missing ServerHello random (unreleased fix since 0.1.0).
+- The README states that binaries need macOS 13 or later: security-rs's Swift
+  bridge targets macOS 12, and security-rs links apple-cf, whose Swift bridge
+  targets macOS 13. 0.1.0 had the same requirement but did not state it.
 
 ### Changed
 

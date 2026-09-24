@@ -30,7 +30,9 @@ The WebRTC media stack needs two things no system DTLS API exposes cleanly:
 dtls = { package = "dtls-rs", path = "../dtls-rs", version = ">=0.2, <0.3" }
 ```
 
-Requires Rust 1.82 or later and macOS (CryptoKit and Security.framework).
+Requires Rust 1.82 or later and macOS 13 or later (CryptoKit and
+Security.framework): `security-rs`'s Swift bridge targets macOS 12, and it links
+`apple-cf`, whose Swift bridge targets macOS 13.
 
 ## Scope
 
