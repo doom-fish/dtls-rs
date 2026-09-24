@@ -107,12 +107,20 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   be re-encoded; `Flight::push` takes the content type, epoch and plaintext.
 - **Breaking:** `EpochSeq::take` returns `Result`; `prf_sha256`, `hmac_sha256`,
   `extended_master_secret` and `EcdheKeyPair::agree` return `Zeroizing` buffers.
+- **Breaking:** `Config` has a new public field, `certificate`; code that builds
+  a `Config` with a struct literal has to set it (for example with
+  `..Config::client()`).
 - Requires cryptokit-rs `>=0.3, <0.4` and security-rs `>=0.6, <0.7`, and adds
   zeroize `>=1.6, <1.9`.
 - `rust-version` is 1.82.
 
 ### Added
 
+- `Certificate` (`generate`, `fingerprint`, `der`) and
+  `Config::with_certificate`, so a certificate can be created, and its
+  fingerprint published, before the role is known; `Connection::new` still
+  generates one when none is given. Clones share one private key, which is
+  zeroized on drop and redacted in `Debug`.
 - `Connection::set_expected_peer_fingerprint`, `ExportedKeyingMaterial`,
   `record::ReplayWindow`, the `CertificateRequest` codec,
   `client::check_certificate_request`,
@@ -122,8 +130,8 @@ to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
   `signature_algorithms` and `ec_point_formats`, `timer::MAX_RETRANSMISSIONS`,
   `RetransmitTimer::expirations`, and a root re-export of `zeroize::Zeroizing`.
 - Negative handshake tests driven by a scripted malicious client and server,
-  plus reassembler-limit, replay-window, negotiation, secret-hygiene and UDP
-  loopback (127.0.0.1) tests.
+  plus reassembler-limit, replay-window, negotiation, secret-hygiene, UDP
+  loopback (127.0.0.1) and supplied-certificate tests.
 
 ### Removed
 

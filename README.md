@@ -123,6 +123,17 @@ using any exported keys. `peer_fingerprint()`, `selected_srtp_profile()` and
 `export_keying_material()` return nothing (or `Error::InvalidState`) until the
 handshake has completed, so they never report an unverified peer.
 
+### Certificates
+
+`Connection::new` generates a fresh self-signed ECDSA-P256 certificate unless
+the `Config` carries one. When the fingerprint has to be published before the
+role is known — a WebRTC offerer puts its `a=fingerprint` in an
+`a=setup:actpass` offer and the answer decides which side is the DTLS client —
+create a `Certificate` first, publish `Certificate::fingerprint()`, and pass the
+certificate with `Config::with_certificate` once the role is known. Clones share
+one private key; it is zeroized when the last clone is dropped, and `Debug`
+never prints it.
+
 ### Driving the connection
 
 * `feed_recv(datagram, peer, now_ms)` takes the datagram's source address. The

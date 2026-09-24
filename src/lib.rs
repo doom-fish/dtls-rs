@@ -69,6 +69,7 @@ pub mod record;
 pub mod role;
 pub mod timer;
 
+pub use cert::Certificate;
 pub use config::{Config, SrtpProfile};
 pub use connection::Connection;
 pub use error::{Error, Result};

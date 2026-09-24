@@ -13,7 +13,6 @@ use zeroize::Zeroizing;
 
 use crate::cert::fingerprint::sha256_fingerprint;
 use crate::cert::parse::{parse_leaf_public_key, PeerPublicKey};
-use crate::cert::{generate, SelfSignedCertificate};
 use crate::config::{Config, SrtpProfile};
 use crate::crypto::constant_time_eq;
 use crate::crypto::ecdhe_p256::EcdheKeyPair;
@@ -57,7 +56,7 @@ pub struct Connection {
     role: Role,
     state: State,
 
-    local_cert: SelfSignedCertificate,
+    local_cert: crate::cert::Certificate,
     local_fingerprint: [u8; 32],
     local_random: [u8; 32],
     client_random: Option<[u8; 32]>,
@@ -101,9 +100,12 @@ impl Connection {
     /// # Errors
     ///
     /// Returns an error if certificate generation or RNG access fails.
-    pub fn new(config: Config) -> Result<Self> {
-        let local_cert = generate()?;
-        let local_fingerprint = sha256_fingerprint(&local_cert.der)?;
+    pub fn new(mut config: Config) -> Result<Self> {
+        let local_cert = match config.certificate.take() {
+            Some(certificate) => certificate,
+            None => crate::cert::Certificate::generate()?,
+        };
+        let local_fingerprint = local_cert.fingerprint();
         let mut local_random = [0u8; 32];
         crate::crypto::fill_random(&mut local_random)?;
         let cookie_secret = CookieSecret::generate()?;
@@ -784,7 +786,7 @@ impl Connection {
 
         if self.certificate_requested {
             // Client Certificate for mutual authentication.
-            let cert = server::build_certificate(self.local_cert.der.clone());
+            let cert = server::build_certificate(self.local_cert.der().to_vec());
             self.send_handshake(msg_type::CERTIFICATE, &cert)?;
         }
 
@@ -801,7 +803,7 @@ impl Connection {
         if self.certificate_requested {
             // CertificateVerify: sign the transcript so far
             // (ClientHello..ClientKeyExchange) with our certificate's private key.
-            let signature = self.local_cert.key.sign_der(&self.transcript)?;
+            let signature = self.local_cert.key().sign_der(&self.transcript)?;
             let cert_verify = CertificateVerify {
                 signature_algorithm: ECDSA_SECP256R1_SHA256,
                 signature,
@@ -899,13 +901,13 @@ impl Connection {
         let sh = server::build_server_hello(server_random, cipher_suite, self.srtp_code);
         self.send_handshake(msg_type::SERVER_HELLO, &sh)?;
 
-        let cert = server::build_certificate(self.local_cert.der.clone());
+        let cert = server::build_certificate(self.local_cert.der().to_vec());
         self.send_handshake(msg_type::CERTIFICATE, &cert)?;
 
         let ephemeral = EcdheKeyPair::generate()?;
         let point = ephemeral.public_point().to_vec();
         let ske = server::build_server_key_exchange(
-            &self.local_cert.key,
+            self.local_cert.key(),
             &client_random,
             &server_random,
             point,

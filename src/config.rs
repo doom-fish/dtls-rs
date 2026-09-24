@@ -1,5 +1,6 @@
 //! Connection configuration: role, SRTP profiles, and peer-fingerprint pinning.
 
+use crate::cert::Certificate;
 use crate::extensions::use_srtp;
 use crate::role::Role;
 
@@ -43,6 +44,8 @@ pub struct Config {
     /// If set, the peer certificate's SHA-256 fingerprint must match this
     /// value (as carried out-of-band in an SDP `a=fingerprint` line).
     pub expected_peer_fingerprint: Option<[u8; 32]>,
+    #[allow(missing_docs)]
+    pub certificate: Option<Certificate>,
 }
 
 impl Config {
@@ -53,6 +56,7 @@ impl Config {
             role: Role::Client,
             srtp_profiles: vec![SrtpProfile::AeadAes128Gcm],
             expected_peer_fingerprint: None,
+            certificate: None,
         }
     }
 
@@ -63,6 +67,7 @@ impl Config {
             role: Role::Server,
             srtp_profiles: vec![SrtpProfile::AeadAes128Gcm],
             expected_peer_fingerprint: None,
+            certificate: None,
         }
     }
 
@@ -70,6 +75,13 @@ impl Config {
     #[must_use]
     pub fn with_expected_peer_fingerprint(mut self, fingerprint: [u8; 32]) -> Self {
         self.expected_peer_fingerprint = Some(fingerprint);
+        self
+    }
+
+    #[allow(missing_docs)]
+    #[must_use]
+    pub fn with_certificate(mut self, certificate: Certificate) -> Self {
+        self.certificate = Some(certificate);
         self
     }
 
