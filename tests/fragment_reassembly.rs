@@ -18,7 +18,8 @@ fn header(msg_type: u8, message_seq: u16, total: u32, offset: u32, len: u32) -> 
 
 fn whole(r: &mut Reassembler, msg_type: u8, seq: u16, body: &[u8]) -> Vec<HandshakeMessage> {
     let len = body.len() as u32;
-    r.feed(0, &header(msg_type, seq, len, 0, len), body).unwrap()
+    r.feed(0, &header(msg_type, seq, len, 0, len), body)
+        .unwrap()
 }
 
 #[test]
@@ -46,7 +47,10 @@ fn reassembles_split_message() {
 #[test]
 fn delivers_in_message_seq_order() {
     let mut r = Reassembler::new();
-    assert!(whole(&mut r, msg_type::SERVER_HELLO, 1, b"two").is_empty());
+    assert_eq!(
+        whole(&mut r, msg_type::SERVER_HELLO, 1, b"two"),
+        [] as [dtls::handshake::fragment::HandshakeMessage; 0]
+    );
     let out = whole(&mut r, msg_type::CLIENT_HELLO, 0, b"one");
     assert_eq!(out.len(), 2);
     assert_eq!(out[0].message_seq, 0);
@@ -58,7 +62,10 @@ fn delivers_in_message_seq_order() {
 fn ignores_retransmit_of_delivered_message() {
     let mut r = Reassembler::new();
     assert_eq!(whole(&mut r, msg_type::CLIENT_HELLO, 0, b"one").len(), 1);
-    assert!(whole(&mut r, msg_type::CLIENT_HELLO, 0, b"one").is_empty());
+    assert_eq!(
+        whole(&mut r, msg_type::CLIENT_HELLO, 0, b"one"),
+        [] as [dtls::handshake::fragment::HandshakeMessage; 0]
+    );
     assert_eq!(r.next_seq(), 1);
 }
 
@@ -74,16 +81,22 @@ fn rejects_fragment_beyond_message_length() {
 fn handles_overlapping_fragments_without_double_counting() {
     let mut r = Reassembler::new();
     let body = b"0123456789";
-    assert!(r
-        .feed(0, &header(msg_type::CERTIFICATE, 0, 10, 0, 6), &body[..6])
-        .unwrap()
-        .is_empty());
+    assert_eq!(
+        r.feed(0, &header(msg_type::CERTIFICATE, 0, 10, 0, 6), &body[..6])
+            .unwrap(),
+        [] as [dtls::handshake::fragment::HandshakeMessage; 0]
+    );
     let after_first = r.buffered_bytes();
-    assert!(r
-        .feed(0, &header(msg_type::CERTIFICATE, 0, 10, 2, 4), &body[2..6])
-        .unwrap()
-        .is_empty());
-    assert_eq!(r.buffered_bytes(), after_first, "duplicate bytes are not stored twice");
+    assert_eq!(
+        r.feed(0, &header(msg_type::CERTIFICATE, 0, 10, 2, 4), &body[2..6])
+            .unwrap(),
+        [] as [dtls::handshake::fragment::HandshakeMessage; 0]
+    );
+    assert_eq!(
+        r.buffered_bytes(),
+        after_first,
+        "duplicate bytes are not stored twice"
+    );
     let out = r
         .feed(0, &header(msg_type::CERTIFICATE, 0, 10, 4, 6), &body[4..])
         .unwrap();
@@ -95,7 +108,11 @@ fn handles_overlapping_fragments_without_double_counting() {
 fn rejects_declared_length_above_cap() {
     let mut r = Reassembler::new();
     let err = r
-        .feed(0, &header(msg_type::CERTIFICATE, 0, MAX_MESSAGE_LEN + 1, 0, 1), b"x")
+        .feed(
+            0,
+            &header(msg_type::CERTIFICATE, 0, MAX_MESSAGE_LEN + 1, 0, 1),
+            b"x",
+        )
         .unwrap_err();
     assert!(err.to_string().contains("exceeds"), "{err}");
     assert_eq!(r.pending_messages(), 0);
@@ -117,12 +134,22 @@ fn sparse_fragment_does_not_allocate_the_declared_length() {
     let out = r
         .feed(
             0,
-            &header(msg_type::CERTIFICATE, 0, MAX_MESSAGE_LEN, MAX_MESSAGE_LEN - 1, 1),
+            &header(
+                msg_type::CERTIFICATE,
+                0,
+                MAX_MESSAGE_LEN,
+                MAX_MESSAGE_LEN - 1,
+                1,
+            ),
             b"x",
         )
         .unwrap();
-    assert!(out.is_empty());
-    assert!(r.buffered_bytes() < 128, "{} bytes buffered", r.buffered_bytes());
+    assert_eq!(out, [] as [dtls::handshake::fragment::HandshakeMessage; 0]);
+    assert!(
+        r.buffered_bytes() < 128,
+        "{} bytes buffered",
+        r.buffered_bytes()
+    );
 }
 
 #[test]
@@ -135,7 +162,13 @@ fn total_buffered_bytes_are_bounded() {
             let offset = part * 16 * 1024;
             let result = r.feed(
                 0,
-                &header(msg_type::CERTIFICATE, seq, MAX_MESSAGE_LEN, offset, 16 * 1024),
+                &header(
+                    msg_type::CERTIFICATE,
+                    seq,
+                    MAX_MESSAGE_LEN,
+                    offset,
+                    16 * 1024,
+                ),
                 &chunk,
             );
             if result.is_err() {
@@ -153,23 +186,34 @@ fn total_buffered_bytes_are_bounded() {
 fn ignores_sequences_outside_the_window() {
     let mut r = Reassembler::new();
     let far = r
-        .feed(0, &header(msg_type::FINISHED, SEQUENCE_WINDOW, 12, 0, 1), b"x")
+        .feed(
+            0,
+            &header(msg_type::FINISHED, SEQUENCE_WINDOW, 12, 0, 1),
+            b"x",
+        )
         .unwrap();
-    assert!(far.is_empty());
+    assert_eq!(far, [] as [dtls::handshake::fragment::HandshakeMessage; 0]);
     assert_eq!(r.pending_messages(), 0);
     assert_eq!(r.buffered_bytes(), 0);
 
     let near = r
-        .feed(0, &header(msg_type::FINISHED, SEQUENCE_WINDOW - 1, 12, 0, 1), b"x")
+        .feed(
+            0,
+            &header(msg_type::FINISHED, SEQUENCE_WINDOW - 1, 12, 0, 1),
+            b"x",
+        )
         .unwrap();
-    assert!(near.is_empty());
+    assert_eq!(near, [] as [dtls::handshake::fragment::HandshakeMessage; 0]);
     assert_eq!(r.pending_messages(), 1);
 }
 
 #[test]
 fn completed_messages_are_freed() {
     let mut r = Reassembler::new();
-    assert!(whole(&mut r, msg_type::SERVER_HELLO, 1, b"later").is_empty());
+    assert_eq!(
+        whole(&mut r, msg_type::SERVER_HELLO, 1, b"later"),
+        [] as [dtls::handshake::fragment::HandshakeMessage; 0]
+    );
     assert!(r.buffered_bytes() > 0);
     assert_eq!(whole(&mut r, msg_type::CLIENT_HELLO, 0, b"first").len(), 2);
     assert_eq!(r.pending_messages(), 0);
@@ -194,7 +238,7 @@ fn zero_length_messages_advance_in_order() {
     for seq in 0..100u16 {
         let out = whole(&mut r, msg_type::SERVER_HELLO_DONE, seq, &[]);
         assert_eq!(out.len(), 1);
-        assert!(out[0].body.is_empty());
+        assert_eq!(out[0].body, [] as [u8; 0]);
     }
     assert_eq!(r.next_seq(), 100);
     assert_eq!(r.buffered_bytes(), 0);
@@ -203,14 +247,24 @@ fn zero_length_messages_advance_in_order() {
 #[test]
 fn message_seq_exhaustion_is_an_error_not_a_wrap() {
     let mut r = Reassembler::starting_at(u16::MAX - 1);
-    assert_eq!(whole(&mut r, msg_type::SERVER_HELLO_DONE, u16::MAX - 1, &[]).len(), 1);
+    assert_eq!(
+        whole(&mut r, msg_type::SERVER_HELLO_DONE, u16::MAX - 1, &[]).len(),
+        1
+    );
     assert_eq!(r.next_seq(), u16::MAX);
     let err = r
-        .feed(0, &header(msg_type::SERVER_HELLO_DONE, u16::MAX, 0, 0, 0), &[])
+        .feed(
+            0,
+            &header(msg_type::SERVER_HELLO_DONE, u16::MAX, 0, 0, 0),
+            &[],
+        )
         .unwrap_err();
     assert!(err.to_string().contains("exhausted"), "{err}");
     assert_eq!(r.next_seq(), u16::MAX);
-    assert!(whole(&mut Reassembler::starting_at(u16::MAX), 1, 0, b"old").is_empty());
+    assert_eq!(
+        whole(&mut Reassembler::starting_at(u16::MAX), 1, 0, b"old"),
+        [] as [dtls::handshake::fragment::HandshakeMessage; 0]
+    );
 }
 
 #[test]
@@ -222,7 +276,11 @@ fn rejects_inconsistent_metadata() {
         .feed(0, &header(msg_type::CERTIFICATE, 0, 11, 5, 5), &[0u8; 5])
         .is_err());
     assert!(r
-        .feed(0, &header(msg_type::SERVER_KEY_EXCHANGE, 0, 10, 5, 5), &[0u8; 5])
+        .feed(
+            0,
+            &header(msg_type::SERVER_KEY_EXCHANGE, 0, 10, 5, 5),
+            &[0u8; 5]
+        )
         .is_err());
     assert!(r
         .feed(1, &header(msg_type::CERTIFICATE, 0, 10, 5, 5), &[0u8; 5])
@@ -261,7 +319,7 @@ fn many_tiny_interleaved_and_duplicate_fragments_reassemble_correctly() {
                 &body[offset as usize..=offset as usize],
             )
             .unwrap();
-        assert!(out.is_empty());
+        assert_eq!(out, [] as [dtls::handshake::fragment::HandshakeMessage; 0]);
     }
     let buffered = r.buffered_bytes();
     for _ in 0..3 {

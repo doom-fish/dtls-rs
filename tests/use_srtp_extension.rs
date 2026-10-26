@@ -13,8 +13,11 @@ fn use_srtp_builds_with_correct_extension_type() {
 fn use_srtp_roundtrips_profiles() {
     let ext = build(&[SRTP_AEAD_AES_128_GCM, SRTP_AEAD_AES_256_GCM]);
     let parsed = parse(&ext.data).unwrap();
-    assert_eq!(parsed.profiles, vec![SRTP_AEAD_AES_128_GCM, SRTP_AEAD_AES_256_GCM]);
-    assert!(parsed.mki.is_empty());
+    assert_eq!(
+        parsed.profiles,
+        vec![SRTP_AEAD_AES_128_GCM, SRTP_AEAD_AES_256_GCM]
+    );
+    assert_eq!(parsed.mki, [] as [u8; 0]);
 }
 
 #[test]

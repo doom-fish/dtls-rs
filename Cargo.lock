@@ -4,7 +4,7 @@ version = 3
 
 [[package]]
 name = "apple-cf"
-version = "0.11.0"
+version = "0.11.4"
 dependencies = [
  "doom-fish-utils",
 ]
@@ -22,23 +22,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "84d7ced0ae9557296835c32bf1b1e02b44c746701f898460fb000d7eaa84f00a"
 
 [[package]]
-name = "crossbeam-queue"
-version = "0.3.12"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0f58bbc28f91df819d0aa2a2c00cd19754769c2fad90579b3592b1c9ba7a3115"
-dependencies = [
- "crossbeam-utils",
-]
-
-[[package]]
-name = "crossbeam-utils"
-version = "0.8.21"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d0a5c400df2834b80a4c3327b3aad3a4c4cd4de0629063962b03235697506a28"
-
-[[package]]
 name = "cryptokit-rs"
-version = "0.3.0"
+version = "0.3.1"
 dependencies = [
  "libc",
  "security-rs",
@@ -47,15 +32,14 @@ dependencies = [
 
 [[package]]
 name = "doom-fish-utils"
-version = "0.4.1"
+version = "0.4.2"
 dependencies = [
- "crossbeam-queue",
  "futures-util",
 ]
 
 [[package]]
 name = "dtls-rs"
-version = "0.2.0"
+version = "0.2.1"
 dependencies = [
  "cryptokit-rs",
  "libc",
@@ -130,7 +114,7 @@ dependencies = [
 
 [[package]]
 name = "security-rs"
-version = "0.6.0"
+version = "0.6.2"
 dependencies = [
  "apple-cf",
  "base64",
