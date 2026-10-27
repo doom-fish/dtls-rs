@@ -1,6 +1,6 @@
 [package]
 name = "dtls-rs"
-version = "0.2.1"
+version = "0.3.0"
 edition = "2021"
 rust-version = "1.82"
 license = "MIT OR Apache-2.0"
@@ -30,8 +30,8 @@ crate-type = ["lib"]
 
 [dependencies]
 libc = "0.2"
-cryptokit-rs = { path = "../cryptokit-rs", version = ">=0.3, <0.4" }
-security-rs = { path = "../security-rs", version = ">=0.6, <0.7" }
+cryptokit-rs = { path = "../cryptokit-rs", version = ">=0.4, <0.5" }
+security-rs = { path = "../security-rs", version = ">=0.8, <0.9" }
 zeroize = ">=1.6, <1.9"
 
 [lints.clippy]
